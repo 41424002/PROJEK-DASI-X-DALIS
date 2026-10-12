@@ -39,8 +39,45 @@ KORELASI = {**FAKTOR, Y: "Rasio ISPA", "kasus_ISPA_balita": "Kasus ISPA",
 
 
 # ----------------------------------------------------------------- data
-def load_data():
-    return pd.read_csv(DATA_PATH)
+NUMERIC_COLUMNS = [
+    "id_desa", "tahun_data", "jumlah_penduduk", "jumlah_balita_0_59bln",
+    "jumlah_rumah_tangga", "persen_RT_kayu_bakar", "persen_RT_LPG",
+    "persen_RT_minyak_tanah", "persen_RT_ada_perokok", "persen_dapur_terpisah",
+    "jarak_ke_puskesmas_km", "kasus_ISPA_balita", "kasus_pneumonia_balita",
+    "kasus_asma_balita", "luas_wilayah_km2", "ketinggian_mdpl",
+    "persen_keluarga_miskin", "rata_rata_pendidikan_ibu_tahun",
+    "rasio_ISPA_per_1000_balita", "kepadatan_penduduk_per_km2", "is_dummy",
+]
+
+
+def prepare_data(df):
+    """Validate editable input and refresh columns calculated by the dashboard."""
+    required = {"nama_kecamatan", "nama_desa", "jumlah_balita_0_59bln",
+                "kasus_ISPA_balita", "persen_RT_kayu_bakar"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError("Kolom wajib tidak ditemukan: " + ", ".join(missing))
+    result = df.copy()
+    for column in NUMERIC_COLUMNS:
+        if column in result:
+            result[column] = pd.to_numeric(result[column], errors="coerce")
+    if result[["jumlah_balita_0_59bln", "kasus_ISPA_balita",
+               "persen_RT_kayu_bakar"]].isna().any().any():
+        raise ValueError("Jumlah balita, kasus ISPA, dan persentase kayu bakar harus berupa angka.")
+    balita = result["jumlah_balita_0_59bln"].replace(0, np.nan)
+    result[Y] = (result["kasus_ISPA_balita"] / balita * 1000).fillna(0).round(1)
+    result["kategori_kayu_bakar"] = np.where(
+        result["persen_RT_kayu_bakar"] >= 50, "Tinggi", "Rendah"
+    )
+    return result
+
+
+def load_data(path=DATA_PATH):
+    return prepare_data(pd.read_csv(path))
+
+
+def save_data(df):
+    prepare_data(df).to_csv(DATA_PATH, index=False)
 
 
 def rate(d):
@@ -262,15 +299,21 @@ main{{max-width:1550px;margin:auto;padding:20px clamp(16px,3vw,44px) 44px}}h2{{f
 .filters{{display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr;gap:12px;align-items:end}}label{{display:grid;gap:6px;font-size:12px;font-weight:700;color:var(--muted)}}select,input{{width:100%;min-height:38px;border:1px solid #c9d5dd;border-radius:6px;padding:8px;background:white;color:var(--ink)}}select[multiple]{{min-height:105px}}
 button{{min-height:38px;border:0;border-radius:6px;padding:8px 14px;background:var(--navy);color:white;font-weight:700;cursor:pointer}}button:hover{{background:#245579}}
 .kpis{{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:16px}}.kpi,.ins,.card,.table-wrap{{background:var(--white);border:1px solid var(--line);border-radius:10px}}.kpi{{padding:14px}}.kpi span{{display:block;font-size:12px;color:var(--muted)}}.kpi b{{display:block;margin-top:6px;font-size:23px}}
-.ins{{padding:8px 22px;line-height:1.65}}.ins li{{margin:5px 0}}.chart-grid{{display:grid;grid-template-columns:1fr 1fr;gap:14px}}.card{{min-width:0;padding:6px}}.chart{{height:420px}}.table-wrap{{overflow:auto;max-height:480px}}table{{border-collapse:collapse;width:100%;font-size:13px}}th,td{{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}}th{{position:sticky;top:0;background:#edf3f5;color:var(--muted)}}.status{{color:var(--muted);font-size:13px;margin:12px 0}}
+.ins{{padding:8px 22px;line-height:1.65}}.ins li{{margin:5px 0}}.chart-grid{{display:grid;grid-template-columns:1fr 1fr;gap:14px}}.card{{min-width:0;padding:6px}}.chart{{height:420px}}.table-wrap{{overflow:auto;max-height:480px}}table{{border-collapse:collapse;width:100%;font-size:13px}}th,td{{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}}th{{position:sticky;top:0;background:#edf3f5;color:var(--muted)}}td input{{min-width:110px;padding:5px;font-size:12px}}.status{{color:var(--muted);font-size:13px;margin:12px 0}}
+.tab-nav{{display:flex;gap:4px;overflow-x:auto;border-bottom:2px solid #dbe3e9;margin-top:24px}}.tab-button{{border-radius:0;background:transparent;color:var(--ink);white-space:nowrap;border-bottom:3px solid transparent;padding:12px 14px;margin-bottom:-2px}}.tab-button:hover{{background:#edf3f5;color:var(--navy)}}.tab-button.active{{color:#e63946;border-bottom-color:#e63946;background:transparent}}.tab-panel{{display:none}}.tab-panel.active{{display:block}}
+.dropdown{{position:relative}}.dropdown-toggle{{width:100%;text-align:left;background:white;color:var(--ink);border:1px solid #c9d5dd;font-weight:400}}.dropdown-toggle::after{{content:'▾';float:right;color:var(--muted)}}.dropdown-menu{{display:none;position:absolute;z-index:20;top:calc(100% + 4px);left:0;right:0;max-height:240px;overflow:auto;background:white;border:1px solid #c9d5dd;border-radius:6px;padding:8px;box-shadow:0 8px 20px #17324d22}}.dropdown.open .dropdown-menu{{display:block}}.check-option{{display:flex;grid-template-columns:none;align-items:center;gap:8px;padding:7px 5px;font-weight:400;color:var(--ink);cursor:pointer}}.check-option:hover{{background:#edf3f5}}.check-option input{{width:16px;min-height:16px;margin:0;accent-color:#e63946}}
 @media(max-width:1050px){{.filters{{grid-template-columns:1fr 1fr}}.kpis{{grid-template-columns:repeat(3,1fr)}}}}@media(max-width:700px){{.chart-grid{{grid-template-columns:1fr}}.kpis{{grid-template-columns:repeat(2,1fr)}}.filters{{grid-template-columns:1fr}}}}
 </style></head><body><header><h1>Dasbor Analisis ISPA Balita</h1><p id="subtitle"></p></header><main>
-<section class="filter-panel"><div class="filter-head"><div><strong>Kontrol analisis</strong><span>Perubahan filter langsung memperbarui indikator, grafik, dan tabel.</span></div><div class="control-actions"><button id="allKec">Semua kecamatan</button><button id="clearKec">Kosongkan kecamatan</button><button id="allKat">Semua kategori</button><button id="download">Unduh CSV</button><button id="reset">Reset</button></div></div><div class="filters"><label>Kecamatan<select id="kec" multiple size="4">{kec_options}</select></label><label>Kategori kayu bakar<select id="kat" multiple><option value="Rendah" selected>Rendah</option><option value="Tinggi" selected>Tinggi</option></select></label><label>Jarak maksimum (km)<input id="jarak" type="range" step="0.1"><output id="jarakValue"></output></label><label>Faktor scatter<select id="factor">{factor_options}</select></label></div></section>
+<section class="filter-panel"><div class="filter-head"><div><strong>Kontrol analisis</strong><span>Perubahan filter langsung memperbarui indikator, grafik, dan tabel.</span></div><div class="control-actions"><button id="allKec">Semua kecamatan</button><button id="clearKec">Kosongkan kecamatan</button><button id="allKat">Semua kategori</button><button id="download">Unduh CSV</button><button id="reset">Reset</button></div></div><div class="filters"><label>Kecamatan<div class="dropdown" id="kecDropdown"><button type="button" class="dropdown-toggle" id="kecToggle">Semua kecamatan</button><div class="dropdown-menu" id="kec"></div></div></label><label>Kategori kayu bakar<div class="dropdown" id="katDropdown"><button type="button" class="dropdown-toggle" id="katToggle">Semua kategori</button><div class="dropdown-menu" id="kat"></div></div></label><label>Jarak maksimum (km)<input id="jarak" type="range" step="0.1"><output id="jarakValue"></output></label><label>Faktor scatter<select id="factor">{factor_options}</select></label></div></section>
 <div class="status" id="status"></div><section class="kpis" id="kpis"></section><h2>Temuan utama dari data terfilter</h2><ul class="ins" id="insights"></ul>
-<h2>Visualisasi interaktif</h2><section class="chart-grid"><div class="card"><div id="hist" class="chart"></div></div><div class="card"><div id="kecChart" class="chart"></div></div><div class="card"><div id="scatter" class="chart"></div></div><div class="card"><div id="top" class="chart"></div></div></section>
-<h2>Data desa</h2><div class="table-wrap"><table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div></main>
-<div hidden>{plotly_bootstrap}</div><script>const DATA={data_json};const FACTORS={json.dumps(FAKTOR, ensure_ascii=True)};const COLORS={{Rendah:'#2a9d8f',Tinggi:'#e76f51'}};
-const $=id=>document.getElementById(id), num=n=>Number(n).toLocaleString('id-ID'), selected=id=>[...$(id).selectedOptions].map(o=>o.value);
+<nav class="tab-nav" aria-label="Menu analisis"><button class="tab-button active" data-tab="ringkasan">Ringkasan</button><button class="tab-button" data-tab="kecamatan">Per Kecamatan</button><button class="tab-button" data-tab="risiko">Faktor Risiko</button><button class="tab-button" data-tab="akses">Akses &amp; Sosial-Ekonomi</button><button class="tab-button" data-tab="data">Data</button></nav>
+<section id="ringkasan" class="tab-panel active"><h2>Ringkasan visualisasi</h2><section class="chart-grid"><div class="card"><div id="hist" class="chart"></div></div><div class="card"><div id="top" class="chart"></div></div></section></section>
+<section id="kecamatan" class="tab-panel"><h2>Analisis per kecamatan</h2><section class="chart-grid"><div class="card"><div id="kecChart" class="chart"></div></div></section></section>
+<section id="risiko" class="tab-panel"><h2>Faktor risiko</h2><section class="chart-grid"><div class="card"><div id="scatter" class="chart"></div></div></section></section>
+<section id="akses" class="tab-panel"><h2>Akses &amp; sosial-ekonomi</h2><section class="chart-grid"><div class="card"><div id="access" class="chart"></div></div></section></section>
+<section id="data" class="tab-panel"><h2>Data desa</h2><section class="filter-panel"><div class="filter-head"><div><strong>Edit data langsung</strong><span>Ubah sel di tabel, unggah CSV pengganti, atau unduh salinan data terbaru.</span></div><div class="control-actions"><input id="upload" type="file" accept=".csv,text/csv"><button id="downloadAll">Unduh semua data</button></div></div><div class="table-wrap"><table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div></section></section></main>
+<div hidden>{plotly_bootstrap}</div><script>let DATA={data_json};const FACTORS={json.dumps(FAKTOR, ensure_ascii=True)};const COLORS={{Rendah:'#2a9d8f',Tinggi:'#e76f51'}};
+const $=id=>document.getElementById(id), num=n=>Number(n).toLocaleString('id-ID'), selected=id=>[...$(id).querySelectorAll('input[type="checkbox"]:checked')].map(o=>o.value);
 const layoutBase={{paper_bgcolor:'white',plot_bgcolor:'white',font:{{family:'Inter, system-ui',color:'#203040'}},margin:{{l:55,r:20,t:55,b:55}},legend:{{orientation:'h',y:-.2}}}};
 function filterData(){{const kec=selected('kec'),kat=selected('kat'),max=Number($('jarak').value);return DATA.filter(d=>kec.includes(d.nama_kecamatan)&&kat.includes(d.kategori_kayu_bakar)&&d.jarak_ke_puskesmas_km<=max)}}
 function rate(d){{const balita=d.reduce((s,x)=>s+x.jumlah_balita_0_59bln,0);return balita?d.reduce((s,x)=>s+x.kasus_ISPA_balita,0)/balita*1000:0}}
@@ -279,10 +322,14 @@ function render(d){{const r=rate(d), totalBalita=d.reduce((s,x)=>s+x.jumlah_bali
 $('kpis').innerHTML=[['Jumlah desa',num(d.length)],['Penduduk',num(d.reduce((s,x)=>s+x.jumlah_penduduk,0))],['Balita (0-59 bln)',num(totalBalita)],['Kasus ISPA',num(ispa)],['Rasio ISPA /1.000',r.toFixed(0)],['Pneumonia / Asma',`${{num(d.reduce((s,x)=>s+x.kasus_pneumonia_balita,0))}} / ${{num(d.reduce((s,x)=>s+x.kasus_asma_balita,0))}}`]].map(x=>`<div class="kpi"><span>${{x[0]}}</span><b>${{x[1]}}</b></div>`).join('');
 const groups=aggregate(d),hi=groups.at(-1),lo=groups[0],top=[...d].sort((a,b)=>b.rasio_ISPA_per_1000_balita-a.rasio_ISPA_per_1000_balita)[0];$('insights').innerHTML=d.length?`<li>Rasio ISPA keseluruhan <b>${{r.toFixed(0)}}</b> per 1.000 balita dari ${{num(ispa)}} kasus.</li><li>Kecamatan tertinggi: <b>${{hi?.nama_kecamatan||'-'}}</b> (${{hi?.rasio.toFixed(0)||0}}), terendah: <b>${{lo?.nama_kecamatan||'-'}}</b> (${{lo?.rasio.toFixed(0)||0}}).</li><li>Desa dengan rasio tertinggi: <b>${{top?.nama_desa||'-'}}</b> (${{top?.rasio_ISPA_per_1000_balita?.toFixed(0)||0}}).</li>`:'<li>Tidak ada data yang cocok dengan filter.</li>';
 plotCharts(d,groups,r);renderTable(d)}}
-function plotCharts(d,groups,r){{Plotly.react('hist',[{{x:d.map(x=>x.rasio_ISPA_per_1000_balita),type:'histogram',marker:{{color:'#457b9d'}},nbinsx:20,name:'Desa'}}],{{...layoutBase,title:'Sebaran rasio ISPA antar desa',xaxis:{{title:'Rasio ISPA per 1.000 balita'}},shapes:[{{type:'line',x0:r,x1:r,y0:0,y1:1,yref:'paper',line:{{dash:'dash',color:'#e76f51'}}}}]}});Plotly.react('kecChart',[{{x:groups.map(x=>x.rasio),y:groups.map(x=>x.nama_kecamatan),type:'bar',orientation:'h',marker:{{color:groups.map(x=>x.rasio),colorscale:'YlOrRd'}},text:groups.map(x=>x.rasio.toFixed(0)),textposition:'auto'}}],{{...layoutBase,title:'Rasio ISPA menurut kecamatan',xaxis:{{title:'Rasio per 1.000 balita'}}}});const factor=$('factor').value;const colors=d.map(x=>COLORS[x.kategori_kayu_bakar]);Plotly.react('scatter',[{{x:d.map(x=>x[factor]),y:d.map(x=>x.rasio_ISPA_per_1000_balita),mode:'markers',type:'scatter',marker:{{color:colors,size:d.map(x=>Math.max(7,Math.sqrt(x.jumlah_balita_0_59bln))) }},text:d.map(x=>x.nama_desa),hovertemplate:'%{{text}}<br>%{{x}}<br>Rasio: %{{y:.0f}}<extra></extra>'}}],{{...layoutBase,title:`${{FACTORS[factor]}} vs rasio ISPA`,xaxis:{{title:FACTORS[factor]}},yaxis:{{title:'Rasio ISPA per 1.000 balita'}}}});const tops=[...d].sort((a,b)=>b.rasio_ISPA_per_1000_balita-a.rasio_ISPA_per_1000_balita).slice(0,10).reverse();Plotly.react('top',[{{x:tops.map(x=>x.rasio_ISPA_per_1000_balita),y:tops.map(x=>x.nama_desa),type:'bar',orientation:'h',marker:{{color:tops.map(x=>COLORS[x.kategori_kayu_bakar])}},text:tops.map(x=>x.rasio_ISPA_per_1000_balita.toFixed(0)),textposition:'auto'}}],{{...layoutBase,title:'10 desa dengan rasio tertinggi',xaxis:{{title:'Rasio ISPA per 1.000 balita'}}}})}}
-function renderTable(d){{const cols=['nama_desa','nama_kecamatan','rasio_ISPA_per_1000_balita','kasus_ISPA_balita','jumlah_balita_0_59bln','jarak_ke_puskesmas_km','kategori_kayu_bakar'];$('tableHead').innerHTML='<tr>'+cols.map(c=>`<th>${{c.replaceAll('_',' ')}}</th>`).join('')+'</tr>';$('tableBody').innerHTML=d.map(x=>'<tr>'+cols.map(c=>`<td>${{typeof x[c]==='number'?x[c].toLocaleString('id-ID',{{maximumFractionDigits:1}}):x[c]}}</td>`).join('')+'</tr>').join('')}}
+function plotCharts(d,groups,r){{Plotly.react('hist',[{{x:d.map(x=>x.rasio_ISPA_per_1000_balita),type:'histogram',marker:{{color:'#457b9d'}},nbinsx:20,name:'Desa'}}],{{...layoutBase,title:'Sebaran rasio ISPA antar desa',xaxis:{{title:'Rasio ISPA per 1.000 balita'}},shapes:[{{type:'line',x0:r,x1:r,y0:0,y1:1,yref:'paper',line:{{dash:'dash',color:'#e76f51'}}}}]}});Plotly.react('kecChart',[{{x:groups.map(x=>x.rasio),y:groups.map(x=>x.nama_kecamatan),type:'bar',orientation:'h',marker:{{color:groups.map(x=>x.rasio),colorscale:'YlOrRd'}},text:groups.map(x=>x.rasio.toFixed(0)),textposition:'auto'}}],{{...layoutBase,title:'Rasio ISPA menurut kecamatan',xaxis:{{title:'Rasio per 1.000 balita'}}}});const factor=$('factor').value;const colors=d.map(x=>COLORS[x.kategori_kayu_bakar]);Plotly.react('scatter',[{{x:d.map(x=>x[factor]),y:d.map(x=>x.rasio_ISPA_per_1000_balita),mode:'markers',type:'scatter',marker:{{color:colors,size:d.map(x=>Math.max(7,Math.sqrt(x.jumlah_balita_0_59bln))) }},text:d.map(x=>x.nama_desa),hovertemplate:'%{{text}}<br>%{{x}}<br>Rasio: %{{y:.0f}}<extra></extra>'}}],{{...layoutBase,title:`${{FACTORS[factor]}} vs rasio ISPA`,xaxis:{{title:FACTORS[factor]}},yaxis:{{title:'Rasio ISPA per 1.000 balita'}}}});const tops=[...d].sort((a,b)=>b.rasio_ISPA_per_1000_balita-a.rasio_ISPA_per_1000_balita).slice(0,10).reverse();Plotly.react('top',[{{x:tops.map(x=>x.rasio_ISPA_per_1000_balita),y:tops.map(x=>x.nama_desa),type:'bar',orientation:'h',marker:{{color:tops.map(x=>COLORS[x.kategori_kayu_bakar])}},text:tops.map(x=>x.rasio_ISPA_per_1000_balita.toFixed(0)),textposition:'auto'}}],{{...layoutBase,title:'10 desa dengan rasio tertinggi',xaxis:{{title:'Rasio ISPA per 1.000 balita'}}}});Plotly.react('access',[{{x:d.map(x=>x.jarak_ke_puskesmas_km),y:d.map(x=>x.kasus_pneumonia_balita),mode:'markers',type:'scatter',marker:{{color:d.map(x=>COLORS[x.kategori_kayu_bakar]),size:9}},text:d.map(x=>x.nama_desa),hovertemplate:'%{{text}}<br>Jarak: %{{x}} km<br>Pneumonia: %{{y}}<extra></extra>'}}],{{...layoutBase,title:'Jarak ke puskesmas vs kasus pneumonia',xaxis:{{title:'Jarak ke puskesmas (km)'}},yaxis:{{title:'Kasus pneumonia'}}}})}}
+function renderTable(d){{const cols=Object.keys(DATA[0]||{{}});$('tableHead').innerHTML='<tr>'+cols.map(c=>`<th>${{c.replaceAll('_',' ')}}</th>`).join('')+'</tr>';$('tableBody').innerHTML=d.map(x=>{{const i=DATA.indexOf(x);return `<tr>${{cols.map(c=>`<td><input data-index="${{i}}" data-column="${{c}}" value="${{String(x[c]??'').replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;')}}"></td>`).join('')}}</tr>`}}).join('')}}
+function refreshDerived(){{DATA.forEach(x=>{{const balita=Number(x.jumlah_balita_0_59bln)||0;const kasus=Number(x.kasus_ISPA_balita)||0;const kayu=Number(x.persen_RT_kayu_bakar)||0;x.rasio_ISPA_per_1000_balita=balita?kasus/balita*1000:0;x.kategori_kayu_bakar=kayu>=50?'Tinggi':'Rendah'}})}}
+function csvText(rows){{const cols=Object.keys(rows[0]||{{}}),quote=v=>`"${{String(v??'').replaceAll('"','""')}}"`;return [cols.join(','),...rows.map(row=>cols.map(c=>quote(row[c])).join(','))].join('\\n')}}
+function downloadRows(rows,name){{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csvText(rows)],{{type:'text/csv'}}));a.download=name;a.click();URL.revokeObjectURL(a.href)}}
+function parseCsv(text){{const lines=text.trim().split(/\\r?\\n/),parse=line=>{{const out=[],re=/(,|\\r?\\n|\\r|^)(?:"([^"]*(?:""[^"]*)*)"|([^",\\r\\n]*))/gi;let m;while((m=re.exec(line))!==null)out.push(m[2]!==undefined?m[2].replaceAll('""','"'):m[3]);return out}},headers=parse(lines.shift());return lines.filter(Boolean).map(line=>Object.fromEntries(parse(line).map((v,i)=>[headers[i],v])))}}
 function csvDownload(d){{const cols=Object.keys(DATA[0]);const quote=v=>`"${{String(v??'').replaceAll('"','""')}}"`;const csv=[cols.join(','),...d.map(row=>cols.map(c=>quote(row[c])).join(','))].join('\\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{{type:'text/csv'}}));a.download='data_ispa_terfilter.csv';a.click();URL.revokeObjectURL(a.href)}}
-function setAll(id,value){{[...$(id).options].forEach(o=>o.selected=value);update()}}function update(){{render(filterData())}}$('kec').addEventListener('change',update);$('kat').addEventListener('change',update);$('factor').addEventListener('change',update);$('jarak').max=Math.max(...DATA.map(x=>x.jarak_ke_puskesmas_km));$('jarak').value=$('jarak').max;$('jarak').addEventListener('input',()=>{{$('jarakValue').value=`hingga ${{$('jarak').value}} km`;update()}});$('allKec').onclick=()=>setAll('kec',true);$('clearKec').onclick=()=>setAll('kec',false);$('allKat').onclick=()=>setAll('kat',true);$('download').onclick=()=>csvDownload(filterData());$('reset').onclick=()=>{{setAll('kec',true);setAll('kat',true);$('jarak').value=$('jarak').max;$('jarakValue').value=`hingga ${{$('jarak').value}} km`;update()}};[...$('kec').options].forEach(o=>o.selected=true);$('jarak').dispatchEvent(new Event('input'));update();</script></body></html>"""
+function updateLabels(){{const kec=selected('kec'),kat=selected('kat');$('kecToggle').textContent=kec.length?`${{kec.length}} kecamatan dipilih`:'Pilih kecamatan';$('katToggle').textContent=kat.length?`${{kat.length}} kategori dipilih`:'Pilih kategori'}}function setAll(id,value){{$(id).querySelectorAll('input[type="checkbox"]').forEach(o=>o.checked=value);updateLabels();update()}}function update(){{updateLabels();render(filterData())}}document.querySelectorAll('.dropdown-toggle').forEach(button=>button.addEventListener('click',e=>{{e.stopPropagation();const dropdown=button.parentElement;document.querySelectorAll('.dropdown.open').forEach(item=>{{if(item!==dropdown)item.classList.remove('open')}});dropdown.classList.toggle('open')}}));document.addEventListener('click',()=>document.querySelectorAll('.dropdown.open').forEach(item=>item.classList.remove('open')));document.querySelectorAll('.tab-button').forEach(button=>button.addEventListener('click',()=>{{document.querySelectorAll('.tab-button,.tab-panel').forEach(element=>element.classList.remove('active'));button.classList.add('active');$(button.dataset.tab).classList.add('active');window.dispatchEvent(new Event('resize'))}}));$('tableBody').addEventListener('change',e=>{{if(!e.target.matches('input[data-index]'))return;const i=Number(e.target.dataset.index),c=e.target.dataset.column;DATA[i][c]=e.target.value;refreshDerived();update()}});$('kec').addEventListener('change',update);$('kat').addEventListener('change',update);$('upload').addEventListener('change',e=>{{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=()=>{{try{{const rows=parseCsv(reader.result);if(!rows.length)throw Error('CSV kosong');DATA=rows;refreshDerived();buildFilters();update()}}catch(error){{alert('CSV tidak dapat dibaca: '+error.message)}}}};reader.readAsText(file)}});function buildFilters(){{const values=[...new Set(DATA.map(x=>x.nama_kecamatan))].sort();$('kec').innerHTML=values.map(v=>`<label class="check-option"><input type="checkbox" value="${{v}}" checked>${{v}}</label>`).join('');$('kat').innerHTML=['Rendah','Tinggi'].map(v=>`<label class="check-option"><input type="checkbox" value="${{v}}" checked>${{v}}</label>`).join('');$('jarak').max=Math.max(...DATA.map(x=>Number(x.jarak_ke_puskesmas_km)||0));$('jarak').value=$('jarak').max;updateLabels()}}$('factor').addEventListener('change',update);$('jarak').addEventListener('input',()=>{{$('jarakValue').value=`hingga ${{$('jarak').value}} km`;update()}});$('allKec').onclick=()=>setAll('kec',true);$('clearKec').onclick=()=>setAll('kec',false);$('allKat').onclick=()=>setAll('kat',true);$('download').onclick=()=>downloadRows(filterData(),'data_ispa_terfilter.csv');$('downloadAll').onclick=()=>downloadRows(DATA,'data_ispa_diperbarui.csv');$('reset').onclick=()=>{{setAll('kec',true);setAll('kat',true);$('jarak').value=$('jarak').max;$('jarakValue').value=`hingga ${{$('jarak').value}} km`;update()}};buildFilters();$('jarak').dispatchEvent(new Event('input'));update();</script></body></html>"""
     Path(out).write_text(page, encoding="utf-8")
     print("Tersimpan:", out)
 
@@ -293,16 +340,24 @@ def run_app():
 
     st.set_page_config(page_title="Dasbor ISPA Balita", page_icon="🫁", layout="wide")
 
-    @st.cache_data
-    def _load():
-        return load_data()
-
-    df = _load()
+    if "dashboard_data" not in st.session_state:
+        st.session_state.dashboard_data = load_data()
+    df = st.session_state.dashboard_data
     st.title("🫁 Dasbor Analisis ISPA Balita")
     st.caption(f"{len(df)} desa · {df.nama_kecamatan.nunique()} kecamatan · tahun {df.tahun_data.iloc[0]} · data dummy")
 
     with st.sidebar:
         st.header("Filter")
+        uploaded = st.file_uploader("Ganti dataset (CSV)", type="csv")
+        if uploaded is not None and st.button("Muat dataset pengganti"):
+            try:
+                st.session_state.dashboard_data = load_data(uploaded)
+                st.rerun()
+            except (pd.errors.ParserError, ValueError) as error:
+                st.error(f"Dataset tidak valid: {error}")
+        if st.button("Muat ulang dari file sumber"):
+            st.session_state.dashboard_data = load_data()
+            st.rerun()
         kec = st.multiselect("Kecamatan", sorted(df.nama_kecamatan.unique()), default=sorted(df.nama_kecamatan.unique()))
         kat = st.multiselect("Kategori kayu bakar", ["Rendah", "Tinggi"], default=["Rendah", "Tinggi"])
         jmin, jmax = float(df.jarak_ke_puskesmas_km.min()), float(df.jarak_ke_puskesmas_km.max())
@@ -313,26 +368,43 @@ def run_app():
     d = d[d.kategori_kayu_bakar.isin(kat) & d.jarak_ke_puskesmas_km.between(*jr)]
     if d.empty:
         st.warning("Tidak ada desa yang cocok dengan filter.")
-        st.stop()
+    else:
+        for col, (k, v) in zip(st.columns(6), kpis(d)):
+            col.metric(k, v)
+        with st.expander("Temuan utama (otomatis dari data terfilter)", expanded=True):
+            for t in insights(d):
+                st.markdown(f"- {t}")
 
-    for col, (k, v) in zip(st.columns(6), kpis(d)):
-        col.metric(k, v)
-    with st.expander("Temuan utama (otomatis dari data terfilter)", expanded=True):
-        for t in insights(d):
-            st.markdown(f"- {t}")
-
-    secs = sections(d, [x])
-    tabs = st.tabs(list(secs) + ["Data"])
-    for tab, rows in zip(tabs, secs.values()):
-        with tab:
-            for row in rows:
-                for c, f in zip(st.columns(len(row)), row):
-                    c.plotly_chart(f, width="stretch")
+        secs = sections(d, [x])
+        tabs = st.tabs(list(secs) + ["Data"])
+        for tab, rows in zip(tabs, secs.values()):
+            with tab:
+                for row in rows:
+                    for c, f in zip(st.columns(len(row)), row):
+                        c.plotly_chart(f, width="stretch")
+    if d.empty:
+        tabs = st.tabs(["Data"])
     with tabs[-1]:
-        st.dataframe(d, width="stretch", hide_index=True)
+        edited = st.data_editor(
+            df, width="stretch", hide_index=True, num_rows="dynamic",
+            key="data_editor",
+        )
+        if not edited.equals(df):
+            try:
+                st.session_state.dashboard_data = prepare_data(edited)
+                st.rerun()
+            except ValueError as error:
+                st.error(f"Perubahan tidak valid: {error}")
+        if st.button("Simpan perubahan ke CSV sumber", type="primary"):
+            try:
+                save_data(st.session_state.dashboard_data)
+                st.success(f"Data tersimpan di {DATA_PATH.name}.")
+            except (OSError, ValueError) as error:
+                st.error(f"Data gagal disimpan: {error}")
         st.download_button("Unduh data terfilter (CSV)", d.to_csv(index=False).encode(), "data_terfilter.csv", "text/csv")
-        st.subheader("Statistik deskriptif")
-        st.dataframe(d.drop(columns=["id_desa", "tahun_data", "is_dummy"]).describe().T.round(2), width="stretch")
+        if not d.empty:
+            st.subheader("Statistik deskriptif")
+            st.dataframe(d.drop(columns=["id_desa", "tahun_data", "is_dummy"]).describe().T.round(2), width="stretch")
 
 
 if __name__ == "__main__":
